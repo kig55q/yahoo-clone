@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Yahoo Finance Chart Demo</title>
+  <script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
+  <style>
+    body { margin: 0; font-family: Arial, sans-serif; display: flex; flex-direction: column; height: 100vh; }
+    #chart { height: 60vh; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { padding: 8px; border: 1px solid #ddd; text-align: left; cursor: pointer; }
+    tr:hover { background-color: #f0f0f0; }
+    .screener { flex: 1; overflow-y: auto; }
+  </style>
+</head>
+<body>
+  <div id="chart"></div>
+  <div class="screener">
+    <table>
+      <thead><tr><th>Symbol</th><th>1W%</th></tr></thead>
+      <tbody id="stock-table">
+        <tr data-symbol="NVDA"><td>NVDA</td><td>+25%</td></tr>
+        <tr data-symbol="AAPL"><td>AAPL</td><td>+1.2%</td></tr>
+        <tr data-symbol="TSLA"><td>TSLA</td><td>-0.8%</td></tr>
+        <tr data-symbol="MSFT"><td>MSFT</td><td>+5%</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <script>
+    const chart = LightweightCharts.createChart(document.getElementById('chart'), {
+      layout: { background: { color: '#ffffff' }, textColor: '#000' },
+      grid: { vertLines: { color: '#eee' }, horzLines: { color: '#eee' } },
+      width: window.innerWidth,
+      height: window.innerHeight * 0.6,
+    });
+
+    const lineSeries = chart.addLineSeries();
+
+    async function fetchYahoo(symbol) {
+      const res = await fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=3mo`);
+      const data = await res.json();
+      const candles = data.chart.result[0];
+      const prices = candles.indicators.quote[0];
+      const timestamps = candles.timestamp;
+
+      const chartData = timestamps.map((t, i) => ({
+        time: t,
+        value: prices.close[i]
+      })).filter(p => p.value != null);
+
+      lineSeries.setData(chartData);
+    }
+
+    document.getElementById("stock-table").addEventListener("click", e => {
+      const row = e.target.closest("tr[data-symbol]");
+      if (!row) return;
+      const symbol = row.getAttribute("data-symbol");
+      fetchYahoo(symbol);
+    });
+
+    fetchYahoo("NVDA");
+  </script>
+</body>
+</html>
