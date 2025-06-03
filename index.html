@@ -2,33 +2,52 @@
 <html>
 <head>
   <meta charset="UTF-8" />
-  <title>Screener (Local Chart Data)</title>
+  <title>Screener (HLC + MA + VOL)</title>
   <script src="https://unpkg.com/lightweight-charts@4.1.1/dist/lightweight-charts.standalone.production.js"></script>
   <style>
     body { margin: 0; font-family: sans-serif; background: #fff; }
-    #chart { height: 60vh; }
+    #chart { height: 60vh; position: relative; }
+    #tooltip {
+      position: absolute;
+      background: #fff;
+      border: 1px solid #aaa;
+      padding: 6px 8px;
+      font-size: 12px;
+      pointer-events: none;
+      z-index: 10;
+      display: none;
+    }
     table { width: 100%; border-collapse: collapse; }
     th, td { padding: 8px; border-bottom: 1px solid #ddd; }
     tr:hover { background: #f2f2f2; cursor: pointer; }
   </style>
 </head>
 <body>
-  <div id="chart"></div>
+  <div id="chart"><div id="tooltip"></div></div>
   <table>
     <thead><tr><th>Symbol</th><th>Price</th><th>1W%</th></tr></thead>
     <tbody id="stock-list"></tbody>
   </table>
+
 <script>
 const chart = LightweightCharts.createChart(document.getElementById("chart"), {
   layout: { background: { color: "#ffffff" }, textColor: "#000" },
-  priceScale: { mode: 1 },
-  timeScale: { timeVisible: true, secondsVisible: false }
+  rightPriceScale: { mode: 2 },
+  timeScale: { timeVisible: true, secondsVisible: false },
+  crossHair: { mode: 1 }
 });
-const barSeries = chart.addBarSeries();
-const volSeries = chart.addHistogramSeries({ priceScaleId: "volume", priceFormat: { type: 'volume' }, color: "#ccc", scaleMargins: { top: 0.8, bottom: 0 } });
+
+const hlcSeries = chart.addLineSeries({ color: "#000", lineWidth: 1 });
 const ma10 = chart.addLineSeries({ color: "#ff9900", lineWidth: 2 });
 const ma80 = chart.addLineSeries({ color: "#005eff", lineWidth: 2 });
+const volSeries = chart.addHistogramSeries({
+  priceScaleId: "volume",
+  priceFormat: { type: 'volume', precision: 1, minMove: 100000 },
+  scaleMargins: { top: 0.8, bottom: 0 }
+});
 const vol20 = chart.addLineSeries({ color: "#666", lineWidth: 1, priceScaleId: "volume" });
+
+const tooltip = document.getElementById("tooltip");
 
 function movingAvg(data, period) {
   const out = [];
@@ -42,32 +61,78 @@ function movingAvg(data, period) {
   return out;
 }
 
+function drawHLCOverlay(data) {
+  chart.subscribeDraw(({ context, pixelRatio }) => {
+    context.clearRect(0, 0, chart.canvas().width, chart.canvas().height);
+    const ts = chart.timeScale();
+    const ps = chart.priceScale("right");
+    for (const d of data) {
+      const x = ts.timeToCoordinate(d.time);
+      const yH = ps.priceToCoordinate(d.high);
+      const yL = ps.priceToCoordinate(d.low);
+      const yC = ps.priceToCoordinate(d.close);
+      const up = d.close > d.prevClose;
+      const color = up ? "#26a69a" : "#ef5350";
+      if (x && yH && yL && yC) {
+        context.strokeStyle = color;
+        context.beginPath();
+        context.moveTo(x, yH);
+        context.lineTo(x, yL);
+        context.stroke();
+        context.beginPath();
+        context.moveTo(x, yC);
+        context.lineTo(x + 4, yC);
+        context.stroke();
+      }
+    }
+  });
+}
+
+let lastData = [];
+
 async function load(symbol) {
   const r = await fetch(`./chart/${symbol}.json`);
-  const data = await r.json();
+  const raw = await r.json();
+  lastData = raw;
 
-  const bars = data.map(d => ({
-    time: d.time,
-    open: d.open,
-    high: d.high,
-    low: d.low,
-    close: d.close,
-    color: d.close > d.open ? "#26a69a" : "#ef5350"
-  }));
-  const vols = data.map(d => ({
+  const closes = raw.map(d => d.close);
+  const volumes = raw.map(d => d.volume);
+  const ma10data = movingAvg(closes, 10);
+  const ma80data = movingAvg(closes, 80);
+  const vol20data = movingAvg(volumes, 20);
+
+  hlcSeries.setData(raw.map(d => ({ time: d.time, value: d.close })));
+  volSeries.setData(raw.map(d => ({
     time: d.time,
     value: d.volume,
-    color: d.close > d.open ? "#26a69a" : "#ef5350"
+    color: d.close > d.prevClose ? "#26a69a" : "#ef5350"
+  })));
+  ma10.setData(ma10data);
+  ma80.setData(ma80data);
+  vol20.setData(vol20data);
+
+  const withPrev = raw.map((d, i) => ({
+    ...d,
+    prevClose: i > 0 ? raw[i - 1].close : d.close
   }));
-
-  barSeries.setData(bars);
-  volSeries.setData(vols);
-  ma10.setData(movingAvg(data.map(d => ({ time: d.time, value: d.close })), 10));
-  ma80.setData(movingAvg(data.map(d => ({ time: d.time, value: d.close })), 80));
-  vol20.setData(movingAvg(data.map(d => ({ time: d.time, value: d.volume })), 20));
-
+  drawHLCOverlay(withPrev);
   chart.timeScale().fitContent();
 }
+
+hlcSeries.subscribeCrosshairMove(param => {
+  if (!param || !param.time || !param.seriesData) {
+    tooltip.style.display = "none";
+    return;
+  }
+  const d = lastData.find(e => e.time === param.time);
+  if (!d) return;
+  const prev = lastData.find(e => e.time < d.time);
+  const chg = prev ? ((d.close - prev.close) / prev.close * 100).toFixed(2) : "0.00";
+  tooltip.innerHTML = `Close: <b>$${d.close}</b><br>Change: <b>${chg}%</b>`;
+  tooltip.style.display = "block";
+  tooltip.style.left = param.point.x + 20 + "px";
+  tooltip.style.top = param.point.y + 10 + "px";
+});
 
 async function populate() {
   const r = await fetch("data.json");
