@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <title>Screener (Local Chart Data)</title>
+  <script src="https://unpkg.com/lightweight-charts@4.1.1/dist/lightweight-charts.standalone.production.js"></script>
+  <style>
+    body { margin: 0; font-family: sans-serif; background: #fff; }
+    #chart { height: 60vh; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { padding: 8px; border-bottom: 1px solid #ddd; }
+    tr:hover { background: #f2f2f2; cursor: pointer; }
+  </style>
+</head>
+<body>
+  <div id="chart"></div>
+  <table>
+    <thead><tr><th>Symbol</th><th>Price</th><th>1W%</th></tr></thead>
+    <tbody id="stock-list"></tbody>
+  </table>
+<script>
+const chart = LightweightCharts.createChart(document.getElementById("chart"), {
+  layout: { background: { color: "#ffffff" }, textColor: "#000" },
+  priceScale: { mode: 1 },
+  timeScale: { timeVisible: true, secondsVisible: false }
+});
+const barSeries = chart.addBarSeries();
+const volSeries = chart.addHistogramSeries({ priceScaleId: "volume", priceFormat: { type: 'volume' }, color: "#ccc", scaleMargins: { top: 0.8, bottom: 0 } });
+const ma10 = chart.addLineSeries({ color: "#ff9900", lineWidth: 2 });
+const ma80 = chart.addLineSeries({ color: "#005eff", lineWidth: 2 });
+const vol20 = chart.addLineSeries({ color: "#666", lineWidth: 1, priceScaleId: "volume" });
+
+function movingAvg(data, period) {
+  const out = [];
+  for (let i = 0; i < data.length; i++) {
+    if (i >= period - 1) {
+      const slice = data.slice(i - period + 1, i + 1);
+      const avg = slice.reduce((a, b) => a + b, 0) / period;
+      out.push({ time: data[i].time, value: avg });
+    }
+  }
+  return out;
+}
+
+async function load(symbol) {
+  const r = await fetch(`./chart/${symbol}.json`);
+  const data = await r.json();
+
+  const bars = data.map(d => ({
+    time: d.time,
+    open: d.open,
+    high: d.high,
+    low: d.low,
+    close: d.close,
+    color: d.close > d.open ? "#26a69a" : "#ef5350"
+  }));
+  const vols = data.map(d => ({
+    time: d.time,
+    value: d.volume,
+    color: d.close > d.open ? "#26a69a" : "#ef5350"
+  }));
+
+  barSeries.setData(bars);
+  volSeries.setData(vols);
+  ma10.setData(movingAvg(data.map(d => ({ time: d.time, value: d.close })), 10));
+  ma80.setData(movingAvg(data.map(d => ({ time: d.time, value: d.close })), 80));
+  vol20.setData(movingAvg(data.map(d => ({ time: d.time, value: d.volume })), 20));
+
+  chart.timeScale().fitContent();
+}
+
+async function populate() {
+  const r = await fetch("data.json");
+  const data = await r.json();
+  const list = document.getElementById("stock-list");
+  list.innerHTML = "";
+  data.forEach((s, i) => {
+    const row = document.createElement("tr");
+    row.innerHTML = `<td>${s.symbol}</td><td>$${s.price}</td><td>${s.change}%</td>`;
+    row.onclick = () => load(s.symbol);
+    list.appendChild(row);
+  });
+  if (data.length) load(data[0].symbol);
+}
+populate();
+</script>
+</body>
+</html>
