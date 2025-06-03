@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="UTF-8" />
-  <title>HLC Bar Screener (Log Scale)</title>
+  <title>HLC Bar Screener (Fixed Log)</title>
   <script src="https://unpkg.com/lightweight-charts@4.1.1/dist/lightweight-charts.standalone.production.js"></script>
   <style>
     body { margin: 0; font-family: sans-serif; background: #fff; }
@@ -35,9 +35,10 @@ const chart = LightweightCharts.createChart(document.getElementById("chart"), {
   rightPriceScale: {
     logScale: true,
     alignLabels: true,
-    visible: true
+    visible: true,
+    scaleMargins: { top: 0.1, bottom: 0.1 }
   },
-  timeScale: { timeVisible: true, secondsVisible: false },
+  timeScale: { timeVisible: true },
   crossHair: { mode: 1 }
 });
 
@@ -45,13 +46,12 @@ const ma10 = chart.addLineSeries({ color: "#ff9900", lineWidth: 2 });
 const ma80 = chart.addLineSeries({ color: "#005eff", lineWidth: 2 });
 const volSeries = chart.addHistogramSeries({
   priceScaleId: "volume",
-  priceFormat: { type: 'volume', precision: 1, minMove: 100000 },
+  priceFormat: { type: 'volume' },
   scaleMargins: { top: 0.8, bottom: 0 },
-  lineWidth: 1, // 🔍 最細 thickness
-  color: "#999"
+  lineWidth: 1
 });
 const vol20 = chart.addLineSeries({ color: "#666", lineWidth: 1, priceScaleId: "volume" });
-const dummySeries = chart.addLineSeries({ color: "#000000", lineWidth: 1, visible: false });
+const dummySeries = chart.addLineSeries({ color: "#000000", visible: false });
 
 const tooltip = document.getElementById("tooltip");
 let lastData = [];
@@ -69,7 +69,7 @@ function movingAvg(data, period) {
 }
 
 function drawRealHLC(data) {
-  chart.subscribeDraw(({ context, pixelRatio }) => {
+  chart.subscribeDraw(({ context }) => {
     context.clearRect(0, 0, chart.canvas().width, chart.canvas().height);
     const ts = chart.timeScale();
     const ps = chart.priceScale("right");
@@ -111,10 +111,10 @@ async function load(symbol) {
   const vol20data = movingAvg(volumes.map((v, i) => ({ time: raw[i].time, value: v })), 20);
 
   dummySeries.setData(raw.map(d => ({ time: d.time, value: d.close })));
-  volSeries.setData(raw.map(d => ({
+  volSeries.setData(raw.map((d, i) => ({
     time: d.time,
     value: d.volume,
-    color: d.close > d.prevClose ? "#26a69a" : "#ef5350"
+    color: i > 0 && d.close > raw[i - 1].close ? "#26a69a" : "#ef5350"
   })));
   ma10.setData(ma10data.map(e => ({ time: e.time, value: e.value })));
   ma80.setData(ma80data.map(e => ({ time: e.time, value: e.value })));
