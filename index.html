@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="UTF-8" />
-  <title>HLC Bar Screener (Fixed Log)</title>
+  <title>HLC Bar Screener (Zoomable Log Scale)</title>
   <script src="https://unpkg.com/lightweight-charts@4.1.1/dist/lightweight-charts.standalone.production.js"></script>
   <style>
     body { margin: 0; font-family: sans-serif; background: #fff; }
@@ -35,11 +35,21 @@ const chart = LightweightCharts.createChart(document.getElementById("chart"), {
   rightPriceScale: {
     logScale: true,
     alignLabels: true,
-    visible: true,
-    scaleMargins: { top: 0.1, bottom: 0.1 }
+    visible: true
   },
-  timeScale: { timeVisible: true },
-  crossHair: { mode: 1 }
+  timeScale: { timeVisible: true, secondsVisible: false },
+  crossHair: { mode: 1 },
+  handleScroll: {
+    mouseWheel: true,
+    pressedMouseMove: true,
+    horzTouchDrag: true,
+    vertTouchDrag: true
+  },
+  handleScale: {
+    axisPressedMouseMove: true,
+    mouseWheel: true,
+    pinch: true
+  }
 });
 
 const ma10 = chart.addLineSeries({ color: "#ff9900", lineWidth: 2 });
@@ -47,11 +57,10 @@ const ma80 = chart.addLineSeries({ color: "#005eff", lineWidth: 2 });
 const volSeries = chart.addHistogramSeries({
   priceScaleId: "volume",
   priceFormat: { type: 'volume' },
-  scaleMargins: { top: 0.8, bottom: 0 },
   lineWidth: 1
 });
 const vol20 = chart.addLineSeries({ color: "#666", lineWidth: 1, priceScaleId: "volume" });
-const dummySeries = chart.addLineSeries({ color: "#000000", visible: false });
+const dummySeries = chart.addLineSeries({ visible: false });
 
 const tooltip = document.getElementById("tooltip");
 let lastData = [];
