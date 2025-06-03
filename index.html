@@ -119,8 +119,8 @@ async function load(symbol) {
   chart.timeScale().fitContent();
 }
 
-hlcSeries.subscribeCrosshairMove(param => {
-  if (!param || !param.time || !param.seriesData) {
+chart.subscribeCrosshairMove(param => {
+  if (!param || !param.time || !param.seriesData || !param.point) {
     tooltip.style.display = "none";
     return;
   }
