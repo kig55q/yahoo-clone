@@ -1,171 +1,156 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Stock Chart</title>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <style>
-        body {
-            background-color: #ffffff;
-            font-family: Arial, sans-serif;
-        }
-        canvas {
-            max-width: 100%;
-            height: auto;
-        }
-    </style>
+  <meta charset="UTF-8" />
+  <title>HLC Bar Screener</title>
+  <script src="https://unpkg.com/lightweight-charts@4.1.1/dist/lightweight-charts.standalone.production.js"></script>
+  <style>
+    body { margin: 0; font-family: sans-serif; background: #fff; }
+    #chart { height: 60vh; position: relative; }
+    #tooltip {
+      position: absolute;
+      background: #fff;
+      border: 1px solid #aaa;
+      padding: 6px 8px;
+      font-size: 12px;
+      pointer-events: none;
+      z-index: 10;
+      display: none;
+    }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { padding: 8px; border-bottom: 1px solid #ddd; }
+    tr:hover { background: #f2f2f2; cursor: pointer; }
+  </style>
 </head>
 <body>
-    <h1>Stock Chart</h1>
-    <canvas id="stockChart"></canvas>
+  <div id="chart"><div id="tooltip"></div></div>
+  <table>
+    <thead><tr><th>Symbol</th><th>Price</th><th>1W%</th></tr></thead>
+    <tbody id="stock-list"></tbody>
+  </table>
 
-    <script>
-        // 假設數據（您需要替換為真實數據）
-        const labels = Array.from({length: 100}, (_, i) => `Day ${i + 1}`);
-        const highData = Array.from({length: 100}, () => Math.random() * 100 + 50);
-        const lowData = highData.map(h => h - Math.random() * 10);
-        const closeData = highData.map((h, i) => (h + lowData[i]) / 2);
-        const volumeData = Array.from({length: 100}, () => Math.random() * 1000);
+<script>
+const chart = LightweightCharts.createChart(document.getElementById("chart"), {
+  layout: { background: { color: "#ffffff" }, textColor: "#000" },
+  rightPriceScale: { mode: 2 },
+  timeScale: { timeVisible: true, secondsVisible: false },
+  crossHair: { mode: 1 }
+});
 
-        // 計算均線
-        const calculateMA = (data, period) => {
-            const ma = [];
-            for (let i = 0; i < data.length; i++) {
-                if (i < period - 1) {
-                    ma.push(null);
-                } else {
-                    const slice = data.slice(i - period + 1, i + 1);
-                    ma.push(slice.reduce((sum, val) => sum + val, 0) / period);
-                }
-            }
-            return ma;
-        };
+const ma10 = chart.addLineSeries({ color: "#ff9900", lineWidth: 2 });
+const ma80 = chart.addLineSeries({ color: "#005eff", lineWidth: 2 });
+const volSeries = chart.addHistogramSeries({
+  priceScaleId: "volume",
+  priceFormat: { type: 'volume', precision: 1, minMove: 100000 },
+  scaleMargins: { top: 0.8, bottom: 0 }
+});
+const vol20 = chart.addLineSeries({ color: "#666", lineWidth: 1, priceScaleId: "volume" });
+const dummySeries = chart.addLineSeries({ color: "#000000", lineWidth: 1, visible: false });
 
-        const ma10 = calculateMA(closeData, 10);
-        const ma80 = calculateMA(closeData, 80);
-        const vol20 = calculateMA(volumeData, 20);
+const tooltip = document.getElementById("tooltip");
+let lastData = [];
 
-        // 計算漲跌百分比（基於收盤價與前日收盤價）
-        const percentChange = closeData.map((close, i) => {
-            if (i === 0) return 0;
-            return ((close - closeData[i - 1]) / closeData[i - 1] * 100).toFixed(2);
-        });
+function movingAvg(data, period) {
+  const out = [];
+  for (let i = 0; i < data.length; i++) {
+    if (i >= period - 1) {
+      const slice = data.slice(i - period + 1, i + 1);
+      const avg = slice.reduce((a, b) => a + b, 0) / period;
+      out.push({ time: data[i].time, value: avg });
+    }
+  }
+  return out;
+}
 
-        const ctx = document.getElementById('stockChart').getContext('2d');
-        new Chart(ctx, {
-            type: 'line',
-            data: {
-                labels: labels,
-                datasets: [
-                    {
-                        label: 'High',
-                        data: highData,
-                        borderColor: '#00ff00',
-                        fill: false,
-                        yAxisID: 'price'
-                    },
-                    {
-                        label: 'Low',
-                        data: lowData,
-                        borderColor: '#ff0000',
-                        fill: false,
-                        yAxisID: 'price'
-                    },
-                    {
-                        label: 'Close',
-                        data: closeData,
-                        borderColor: '#0000ff',
-                        fill: false,
-                        yAxisID: 'price'
-                    },
-                    {
-                        label: 'MA10',
-                        data: ma10,
-                        borderColor: '#ffa500',
-                        fill: false,
-                        yAxisID: 'price'
-                    },
-                    {
-                        label: 'MA80',
-                        data: ma80,
-                        borderColor: '#800080',
-                        fill: false,
-                        yAxisID: 'price'
-                    },
-                    {
-                        label: 'Volume',
-                        type: 'bar',
-                        data: volumeData,
-                        backgroundColor: 'rgba(0, 0, 255, 0.3)',
-                        yAxisID: 'volume'
-                    },
-                    {
-                        label: 'VOL20',
-                        data: vol20,
-                        borderColor: '#008080',
-                        fill: false,
-                        yAxisID: 'volume'
-                    }
-                ]
-            },
-            options: {
-                responsive: true,
-                interaction: {
-                    mode: 'index',
-                    intersect: false
-                },
-                scales: {
-                    price: {
-                        type: 'logarithmic',
-                        position: 'left',
-                        title: { display: true, text: 'Price' }
-                    },
-                    volume: {
-                        position: 'right',
-                        title: { display: true, text: 'Volume' },
-                        grid: { display: false }
-                    },
-                    x: {
-                        title: { display: true, text: 'Time' }
-                    }
-                },
-                plugins: {
-                    tooltip: {
-                        callbacks: {
-                            label: function(context) {
-                                const datasetLabel = context.dataset.label || '';
-                                const value = context.parsed.y.toFixed(2);
-                                if (datasetLabel === 'Close') {
-                                    const index = context.dataIndex;
-                                    const change = percentChange[index];
-                                    const color = change >= 0 ? '#00ff00' : '#ff0000'; // 綠色上漲，紅色下跌
-                                    return [
-                                        `${datasetLabel}: ${value}`,
-                                        { text: `Change: ${change}%`, color: color }
-                                    ];
-                                }
-                                return `${datasetLabel}: ${value}`;
-                            },
-                            labelColor: function(context) {
-                                if (context.dataset.label === 'Close') {
-                                    const index = context.dataIndex;
-                                    const change = percentChange[index];
-                                    return {
-                                        borderColor: change >= 0 ? '#00ff00' : '#ff0000',
-                                        backgroundColor: change >= 0 ? '#00ff00' : '#ff0000'
-                                    };
-                                }
-                                return {
-                                    borderColor: context.dataset.borderColor,
-                                    backgroundColor: context.dataset.borderColor
-                                };
-                            }
-                        }
-                    }
-                }
-            }
-        });
-    </script>
+function drawRealHLC(data) {
+  chart.subscribeDraw(({ context, pixelRatio }) => {
+    context.clearRect(0, 0, chart.canvas().width, chart.canvas().height);
+    const ts = chart.timeScale();
+    const ps = chart.priceScale("right");
+
+    for (const d of data) {
+      const x = ts.timeToCoordinate(d.time);
+      const yH = ps.priceToCoordinate(d.high);
+      const yL = ps.priceToCoordinate(d.low);
+      const yC = ps.priceToCoordinate(d.close);
+      const up = d.close > d.prevClose;
+      const color = up ? "#26a69a" : "#ef5350";
+
+      if (x && yH && yL && yC) {
+        context.strokeStyle = color;
+        context.lineWidth = 1;
+        context.beginPath();
+        context.moveTo(x, yH);
+        context.lineTo(x, yL);
+        context.stroke();
+
+        context.beginPath();
+        context.moveTo(x, yC);
+        context.lineTo(x + 5, yC);
+        context.stroke();
+      }
+    }
+  });
+}
+
+async function load(symbol) {
+  const r = await fetch(`./chart/${symbol}.json`);
+  const raw = await r.json();
+  lastData = raw;
+
+  const closes = raw.map(d => d.close);
+  const volumes = raw.map(d => d.volume);
+  const ma10data = movingAvg(raw, 10);
+  const ma80data = movingAvg(raw, 80);
+  const vol20data = movingAvg(volumes.map((v, i) => ({ time: raw[i].time, value: v })), 20);
+
+  dummySeries.setData(raw.map(d => ({ time: d.time, value: d.close })));
+  volSeries.setData(raw.map(d => ({
+    time: d.time,
+    value: d.volume,
+    color: d.close > d.prevClose ? "#26a69a" : "#ef5350"
+  })));
+  ma10.setData(ma10data.map(e => ({ time: e.time, value: e.value })));
+  ma80.setData(ma80data.map(e => ({ time: e.time, value: e.value })));
+  vol20.setData(vol20data.map(e => ({ time: e.time, value: e.value })));
+
+  const withPrev = raw.map((d, i) => ({
+    ...d,
+    prevClose: i > 0 ? raw[i - 1].close : d.close
+  }));
+  drawRealHLC(withPrev);
+  chart.timeScale().fitContent();
+}
+
+chart.subscribeCrosshairMove(param => {
+  if (!param || !param.time || !param.seriesData || !param.point) {
+    tooltip.style.display = "none";
+    return;
+  }
+  const d = lastData.find(e => e.time === param.time);
+  if (!d) return;
+  const prev = lastData.find(e => e.time < d.time);
+  const chg = prev ? ((d.close - prev.close) / prev.close * 100).toFixed(2) : "0.00";
+  tooltip.innerHTML = `Close: <b>$${d.close}</b><br>Change: <b>${chg}%</b>`;
+  tooltip.style.display = "block";
+  tooltip.style.left = param.point.x + 20 + "px";
+  tooltip.style.top = param.point.y + 10 + "px";
+});
+
+async function populate() {
+  const r = await fetch("data.json");
+  const data = await r.json();
+  const list = document.getElementById("stock-list");
+  list.innerHTML = "";
+  data.forEach((s, i) => {
+    const row = document.createElement("tr");
+    row.innerHTML = `<td>${s.symbol}</td><td>$${s.price}</td><td>${s.change}%</td>`;
+    row.onclick = () => load(s.symbol);
+    list.appendChild(row);
+  });
+  if (data.length) load(data[0].symbol);
+}
+populate();
+</script>
 </body>
 </html>
