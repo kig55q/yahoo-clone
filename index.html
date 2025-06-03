@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="UTF-8" />
-  <title>HLC Bar Screener</title>
+  <title>HLC Bar Screener (Log Scale)</title>
   <script src="https://unpkg.com/lightweight-charts@4.1.1/dist/lightweight-charts.standalone.production.js"></script>
   <style>
     body { margin: 0; font-family: sans-serif; background: #fff; }
@@ -32,7 +32,11 @@
 <script>
 const chart = LightweightCharts.createChart(document.getElementById("chart"), {
   layout: { background: { color: "#ffffff" }, textColor: "#000" },
-  rightPriceScale: { mode: 2 },
+  rightPriceScale: {
+    logScale: true,
+    alignLabels: true,
+    visible: true
+  },
   timeScale: { timeVisible: true, secondsVisible: false },
   crossHair: { mode: 1 }
 });
@@ -42,7 +46,9 @@ const ma80 = chart.addLineSeries({ color: "#005eff", lineWidth: 2 });
 const volSeries = chart.addHistogramSeries({
   priceScaleId: "volume",
   priceFormat: { type: 'volume', precision: 1, minMove: 100000 },
-  scaleMargins: { top: 0.8, bottom: 0 }
+  scaleMargins: { top: 0.8, bottom: 0 },
+  lineWidth: 1, // 🔍 最細 thickness
+  color: "#999"
 });
 const vol20 = chart.addLineSeries({ color: "#666", lineWidth: 1, priceScaleId: "volume" });
 const dummySeries = chart.addLineSeries({ color: "#000000", lineWidth: 1, visible: false });
