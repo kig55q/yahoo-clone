@@ -2,8 +2,8 @@
 <html>
 <head>
   <meta charset="UTF-8" />
-  <title>Screener (HLC + MA + VOL)</title>
-  <script src="https://unpkg.com/lightweight-charts@4.1.1/dist/lightweight-charts.standalone.production.js"></script>
+  <title>Screener (Local Chart Data)</title>
+  <script src="="https://unpkg.com/lightweight-charts@4.1.1/dist/lightweight-charts.standalone.production.js"></script>
   <style>
     body { margin: 0; font-family: sans-serif; background: #fff; }
     #chart { height: 60vh; }
@@ -30,43 +30,45 @@ const ma10 = chart.addLineSeries({ color: "#ff9900", lineWidth: 2 });
 const ma80 = chart.addLineSeries({ color: "#005eff", lineWidth: 2 });
 const vol20 = chart.addLineSeries({ color: "#666", lineWidth: 1, priceScaleId: "volume" });
 
-async function load(symbol) {
-  const r = await fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?range=3mo&interval=1d`);
-  const j = await r.json();
-  const d = j.chart.result[0];
-  const t = d.timestamp;
-  const q = d.indicators.quote[0];
-  const bars = [], vol = [], closes = [], volumes = [];
-  for (let i = 0; i < t.length; i++) {
-    if (!q.close[i] || !q.high[i] || !q.low[i]) continue;
-    const prevClose = i > 0 ? q.close[i - 1] : q.close[i];
-    const up = q.close[i] > prevClose;
-    bars.push({
-      time: t[i], open: q.open[i], high: q.high[i], low: q.low[i], close: q.close[i],
-      color: up ? "#26a69a" : "#ef5350"
-    });
-    vol.push({ time: t[i], value: q.volume[i], color: up ? "#26a69a" : "#ef5350" });
-    closes.push(q.close[i]);
-    volumes.push(q.volume[i]);
-  }
-  function movingAvg(data, period) {
-    const out = [];
-    for (let i = 0; i < data.length; i++) {
-      if (i >= period - 1) {
-        const slice = data.slice(i - period + 1, i + 1);
-        const avg = slice.reduce((a, b) => a + b, 0) / period;
-        out.push({ time: t[i], value: avg });
-      }
+function movingAvg(data, period) {
+  const out = [];
+  for (let i = 0; i < data.length; i++) {
+    if (i >= period - 1) {
+      const slice = data.slice(i - period + 1, i + 1);
+      const avg = slice.reduce((a, b) => a + b, 0) / period;
+      out.push({ time: data[i].time, value: avg });
     }
-    return out;
   }
+  return out;
+}
+
+async function load(symbol) {
+  const r = await fetch(`./chart/${symbol}.json`);
+  const data = await r.json();
+
+  const bars = data.map(d => ({
+    time: d.time,
+    open: d.open,
+    high: d.high,
+    low: d.low,
+    close: d.close,
+    color: d.close > d.open ? "#26a69a" : "#ef5350"
+  }));
+  const vols = data.map(d => ({
+    time: d.time,
+    value: d.volume,
+    color: d.close > d.open ? "#26a69a" : "#ef5350"
+  }));
+
   barSeries.setData(bars);
-  volSeries.setData(vol);
-  ma10.setData(movingAvg(closes, 10));
-  ma80.setData(movingAvg(closes, 80));
-  vol20.setData(movingAvg(volumes, 20));
+  volSeries.setData(vols);
+  ma10.setData(movingAvg(data.map(d => ({ time: d.time, value: d.close })), 10));
+  ma80.setData(movingAvg(data.map(d => ({ time: d.time, value: d.close })), 80));
+  vol20.setData(movingAvg(data.map(d => ({ time: d.time, value: d.volume })), 20));
+
   chart.timeScale().fitContent();
 }
+
 async function populate() {
   const r = await fetch("data.json");
   const data = await r.json();
